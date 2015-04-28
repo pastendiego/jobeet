@@ -14,9 +14,11 @@ class JobRepository extends EntityRepository
     public function getActiveJobs($category_id = null, $max = null, $offset = null)
   {
     $qb = $this->createQueryBuilder('j')
-      ->where('j.expires_at > :date')
-      ->setParameter('date', date('Y-m-d H:i:s', time()))
-      ->orderBy('j.expires_at', 'DESC');
+    ->where('j.expires_at > :date')
+    ->setParameter('date', date('Y-m-d H:i:s', time()))
+    ->andWhere('j.is_activated = :activated')
+    ->setParameter('activated', 1)
+    ->orderBy('j.expires_at', 'DESC');
     
     if($max)
     {
@@ -42,12 +44,14 @@ class JobRepository extends EntityRepository
     public function getActiveJob($id)
     {
       $query = $this->createQueryBuilder('j')
-        ->where('j.id = :id')
-        ->setParameter('id', $id)
-        ->andWhere('j.expires_at > :date')
-        ->setParameter('date', date('Y-m-d H:i:s', time()))
-        ->setMaxResults(1)
-        ->getQuery();
+      ->where('j.id = :id')
+      ->setParameter('id', $id)
+      ->andWhere('j.expires_at > :date')
+      ->setParameter('date', date('Y-m-d H:i:s', time()))
+      ->andWhere('j.is_activated = :activated')
+      ->setParameter('activated', 1)
+      ->setMaxResults(1)
+      ->getQuery();
 
       try {
         $job = $query->getSingleResult();
@@ -63,7 +67,9 @@ class JobRepository extends EntityRepository
         $qb = $this->createQueryBuilder('j')
         ->select('count(j.id)')
         ->where('j.expires_at > :date')
-        ->setParameter('date', date('Y-m-d H:i:s', time()));
+        ->setParameter('date', date('Y-m-d H:i:s', time()))
+        ->andWhere('j.is_activated = :activated')
+        ->setParameter('activated', 1);
 
         if($category_id)
         {
@@ -74,5 +80,16 @@ class JobRepository extends EntityRepository
         $query = $qb->getQuery();
 
         return $query->getSingleScalarResult();
+    }
+    
+    public function cleanup($days)
+    {
+      $query = $this->createQueryBuilder('j')
+        ->delete()
+        ->where('j.is_activated IS NULL')
+        ->andWhere('j.created_at < :created_at')     ->setParameter('created_at',  date('Y-m-d', time() - 86400 * $days))
+        ->getQuery();
+
+      return $query->execute();
     }
 }
